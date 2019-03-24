@@ -1,4 +1,4 @@
-const {jwtDec} = require('../jwt');
+const { jwtDec } = require('../jwt');
 const io = require('./io.js').io
 const server = require('./io.js').server
 const mess = require('../database/model').mess;
@@ -9,18 +9,23 @@ const cookieParser = require('cookie-parser')
 const event = function (chatData, chatMethod, port) {
 
   // socket链接时执行
-  io.on('connection', (socket) =>  {
+  /**思考：是否要在患者进入聊天界面的时候，才连接到通讯服务器 */
+  io.on('connection', (socket) => {
+    //网络请求代 cookie
     const cookieData = cookie.parse(socket.handshake.headers.cookie);
+    //验证信息放置在 cookie 的 token 里
     const token = cookieData.token
-    jwtDec(token).then(function(tokenObj) {
-      const currentRoomName = chatMethod.getCurrentRoomID(socket)
-      let loginedUserName = ''
-      let loginedUserImg = ''
+    jwtDec(token).then(function (tokenObj) {//解析用户信息
+      /**是否可以将房间号直接传递过来 */
+      const currentRoomName = chatMethod.getCurrentRoomID(socket) //获取当前房间ID
+      let loginedUserName = '' //用户名
+      let loginedUserImg = ''//用户头像
       socket.join(currentRoomName)  // 进入房间
-        loginedUserName = tokenObj.user
+      loginedUserName = tokenObj.user//从解析后到token里拿到用户名
 
-        // 通过session中的用户名在数据库中查询用户信息
-        info.findOne({user: loginedUserName}, (err, val) => {
+      // 通过session中的用户名在数据库中查询用户信息
+      /**info：monogodb 中到 infoScheme */
+      info.findOne({ user: loginedUserName }, (err, val) => {
 
         // 如果出错则打印出来
         if (err) {
@@ -30,11 +35,11 @@ const event = function (chatData, chatMethod, port) {
         // 如果查询到用户数据则保持图片Url到loginedUserImg变量里
         else if (val !== null) {
           loginedUserImg = val.img
-          
+
           console.log(`${loginedUserName} joined ${currentRoomName}`)
 
           // 发送请求当前房间号事件
-          socket.emit('room id req', {name: loginedUserName, img: loginedUserImg})
+          socket.emit('room id req', { name: loginedUserName, img: loginedUserImg })
 
           // 添加用户到当前房间
           chatMethod.addUserToTheRoom(currentRoomName, {
@@ -63,7 +68,7 @@ const event = function (chatData, chatMethod, port) {
       socket.on('room id res', (currentRoomName) => {
 
         // 读取当前房间的聊天信息
-        mess.find({'room': currentRoomName}).sort({'_id': -1}).limit(100).exec((err, data) =>  {
+        mess.find({ 'room': currentRoomName }).sort({ '_id': -1 }).limit(100).exec((err, data) => {
           console.log('room data ready / ' + (data.lenth !== 0))
           socket.emit('mess show res', data)
         })
@@ -73,7 +78,7 @@ const event = function (chatData, chatMethod, port) {
         console.log('connection / currentRoom: ' + chatData.currentRoomName)
 
         // 不存在则创建新房间
-        if(!chatMethod.isRoomExist(chatData.room, currentRoomName)) {
+        if (!chatMethod.isRoomExist(chatData.room, currentRoomName)) {
           chatData.roomList.push(currentRoomName)
           chatData.room.push({
             name: currentRoomName,
@@ -108,7 +113,7 @@ const event = function (chatData, chatMethod, port) {
         chatData.currentRoomName = chatMethod.getCurrentRoomID(socket)
         chatData.currentRoomIndex = chatMethod.getCurrentRoomIndex(chatData.currentRoomName)
         chatMethod.delUserFromTheRoom(chatData.currentRoomName, loginedUserName)
-        
+
         // 向当前房间广播用户退出信息
         socket.broadcast.to(chatData.currentRoomName).emit('user logout req', {
           currentUser: loginedUserName,
